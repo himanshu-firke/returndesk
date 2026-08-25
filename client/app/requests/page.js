@@ -315,7 +315,7 @@ function RequestsContent() {
                       </td>
 
                       {/* Date */}
-                      <td className="py-4 px-5 text-xs text-gray-500 whitespace-nowrap">
+                      <td className="py-4 px-5 text-xs text-gray-500 whitespace-nowrap" suppressHydrationWarning>
                         {new Date(req.created_at).toLocaleDateString('en-US', {
                           month: 'short',
                           day: 'numeric',
