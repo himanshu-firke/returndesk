@@ -1,0 +1,26 @@
+{
+  "name": "returndesk-server",
+  "version": "1.0.0",
+  "description": "ReturnDesk API — Express backend for the return request management system",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "db:check": "node scripts/check-db.js",
+    "db:setup": "node scripts/setup-db.js",
+    "db:seed": "node scripts/seed.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "pg": "^8.23.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
