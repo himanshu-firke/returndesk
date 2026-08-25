@@ -1,7 +1,7 @@
 # ReturnDesk
 
 ## 1. Overview
-ReturnDesk is a full-stack return management application for online store support agents to create return requests, review items, execute legal status transitions, record resolutions (Refund, Replacement, Store Credit), and append chronological internal notes.
+ReturnDesk is a full-stack return management application for online store support agents to raise customer returns, review items, execute legal status transitions, record resolutions (Refund, Replacement, Store Credit), and append chronological internal notes.
 
 ---
 
@@ -14,34 +14,80 @@ ReturnDesk is a full-stack return management application for online store suppor
 
 ---
 
-## 3. Architecture Flow
-```
-[Browser Client] 
-      │  (Next.js App Router UI)
-      ▼
-[Express REST API] 
-      │  (Zod Validation Middleware)
-      ▼
-[Service Layer] 
-      │  (Enforces 5 Business Rules & State Transitions)
-      ▼
-[Raw SQL Query Layer] 
-      │  (Parameterized SQL via pg Pool)
-      ▼
-[PostgreSQL Database] 
-         (ENUMs, Partial Unique Indexes, Sequences)
+## 3. Database Schema & Architecture
+
+### Tables & Data Types
+1. **`return_requests`**:
+   - `id`: `UUID PRIMARY KEY DEFAULT gen_random_uuid()`
+   - `reference`: `VARCHAR(12) UNIQUE NOT NULL` (Generated atomically via sequence `'RD-' || LPAD(nextval('request_ref_seq')::text, 6, '0')`)
+   - `customer_name`: `VARCHAR(255) NOT NULL`
+   - `customer_email`: `VARCHAR(255) NOT NULL`
+   - `order_id`: `VARCHAR(100) NOT NULL`
+   - `item_name`: `VARCHAR(255) NOT NULL`
+   - `item_sku`: `VARCHAR(100)`
+   - `quantity`: `INTEGER NOT NULL CHECK (quantity >= 1)`
+   - `reason`: `return_reason ENUM ('Damaged', 'Wrong Item', 'Size Issue', 'Not As Described', 'Changed Mind')`
+   - `status`: `request_status ENUM ('Open', 'In Review', 'Approved', 'Rejected', 'Completed') DEFAULT 'Open'`
+   - `resolution`: `resolution_type ENUM ('Refund', 'Replacement', 'Store Credit')`
+   - `refund_amount`: `NUMERIC(10, 2)`
+   - `is_removed`: `BOOLEAN NOT NULL DEFAULT FALSE`
+   - `removed_at`: `TIMESTAMPTZ`
+   - `created_at`, `updated_at`: `TIMESTAMPTZ NOT NULL DEFAULT NOW()`
+
+2. **`notes`**:
+   - `id`: `UUID PRIMARY KEY DEFAULT gen_random_uuid()`
+   - `request_id`: `UUID NOT NULL REFERENCES return_requests(id)`
+   - `content`: `TEXT NOT NULL`
+   - `created_at`: `TIMESTAMPTZ NOT NULL DEFAULT NOW()`
+
+### Partial Unique Index (Rule 3)
+```sql
+CREATE UNIQUE INDEX unique_active_item_request
+  ON return_requests (order_id, item_name)
+  WHERE status NOT IN ('Rejected', 'Completed')
+    AND is_removed = FALSE;
 ```
 
 ---
 
-## 4. Setup & Running (Clean Machine)
+## 4. API Design, Endpoints & Error Reporting
+
+### REST Endpoints
+| Method | Endpoint | Description | Status Codes |
+|---|---|---|---|
+| `GET` | `/api/health` | Health probe | `200` |
+| `GET` | `/api/requests` | List returns (search, filter, sort, pagination in SQL) | `200`, `400` |
+| `POST` | `/api/requests` | Raise a new return request | `201`, `400`, `409` |
+| `GET` | `/api/requests/:id` | Fetch return details with chronological notes | `200`, `400`, `404` |
+| `PATCH` | `/api/requests/:id` | Update editable details (Open / In Review only) | `200`, `400`, `404`, `422` |
+| `PATCH` | `/api/requests/:id/status` | Transition status with resolution validation | `200`, `400`, `404`, `422` |
+| `POST` | `/api/requests/:id/notes` | Append internal note (allowed at any status) | `201`, `400`, `404` |
+| `DELETE` | `/api/requests/:id` | Soft-delete request (Open / Rejected only) | `200`, `400`, `404`, `422` |
+
+### Response Structure & Error Reporting
+All responses use a predictable JSON envelope:
+- **Success**: `{ "data": <payload>, "pagination": { "page": 1, "limit": 10, "total": 33, "totalPages": 4 } }`
+- **Business Rule Refusal / Error**:
+  ```json
+  {
+    "error": {
+      "code": "INVALID_STATUS_TRANSITION",
+      "message": "Cannot transition from 'Open' to 'Approved'. Legal transitions from 'Open': 'In Review'."
+    }
+  }
+  ```
+- **Error Codes**: `VALIDATION_ERROR` (400), `INVALID_ID` (400), `NOT_FOUND` (404), `DUPLICATE_ACTIVE_REQUEST` (409), `INVALID_STATUS_TRANSITION` (422), `REQUEST_LOCKED` (422), `REMOVAL_NOT_ALLOWED` (422).
+
+---
+
+## 5. Clean Machine Setup & Running
 
 ### Prerequisites
-- Node.js 18+ (tested on v22)
-- PostgreSQL 14+ installed and running locally
+- Node.js 18+
+- PostgreSQL 14+ running locally on port 5432
 
 ### Step 1: Database Setup
-1. Create a database in PostgreSQL:
+1. Create PostgreSQL database:
    ```sql
    CREATE DATABASE returndesk;
    ```
@@ -56,79 +102,61 @@ ReturnDesk is a full-stack return management application for online store suppor
    CLIENT_URL=http://localhost:3000
    ```
 
-### Step 2: Backend Installation & Seed Script
-Inside the `server` directory:
+### Step 2: Backend Setup & Seed Script
 ```bash
 cd server
 npm install
 
-# 1. Verify DB connection
+# 1. Test database connection
 npm run db:check
 
-# 2. Run schema migration (creates tables, ENUMs, sequence, partial index)
+# 2. Run DDL schema migration
 npm run db:setup
 
-# 3. Run seed script (seeds 33 realistic requests across all statuses + 17 notes)
+# 3. Populate database with 33 realistic requests across all statuses + 17 notes
 npm run db:seed
 
-# 4. Start the Express API server
+# 4. Start backend Express server (http://localhost:3001)
 npm run dev
-# Running at http://localhost:3001
 ```
 
-### Step 3: Frontend Installation & Run
-In a separate terminal:
+### Step 3: Frontend Setup
+In a new terminal:
 ```bash
 cd client
 npm install
 npm run dev
-# Running at http://localhost:3000
+# Open http://localhost:3000 in your browser
 ```
-Open **http://localhost:3000** in your browser.
-
----
-
-## 5. Features Implemented
-
-1. **Raising Requests**: Agent creates returns with customer contact, order ID, product name, quantity, reason, and optional initial notes. Reference `RD-XXXXXX` is auto-generated by the database sequence.
-2. **Server-side Search, Filtering & Pagination**: Search by customer, order, or reference; filter by status and reason; sort by date, reason, or status; page through results. All executed in SQL.
-3. **5 Business Rules Server-Enforced**:
-   - **Rule 1 (Status Flow)**: `Open` → `In Review` → `Approved` / `Rejected` → `Completed`. Final states locked from further transitions.
-   - **Rule 2 (Approval Resolution)**: `Approved` requires `Refund` (> 0 amount), `Replacement`, or `Store Credit` (no amount).
-   - **Rule 3 (Duplicate Protection)**: Prevents 2 live requests for the same `(order_id, item_name)` via app logic and PostgreSQL partial unique index.
-   - **Rule 4 (Locking Once Decided)**: Details locked from edits once `Approved`, `Rejected`, or `Completed`. Notes remain appendable.
-   - **Rule 5 (Soft Deletion)**: Only `Open` and `Rejected` requests can be removed (`is_removed = TRUE`). Hidden from list/fetch but retained in DB.
-4. **Append-only Notes**: Chronological notes list viewable and addable across all request stages.
-5. **Robust Error Handling**: Consistent JSON error envelope with machine-readable error codes (`VALIDATION_ERROR`, `DUPLICATE_ACTIVE_REQUEST`, `INVALID_STATUS_TRANSITION`, `REQUEST_LOCKED`, `REMOVAL_NOT_ALLOWED`).
 
 ---
 
 ## 6. Design Decisions & Why
 
-1. **Raw SQL over ORM**: Direct control over query performance, partial unique indexing (`WHERE status NOT IN ('Rejected', 'Completed') AND is_removed = FALSE`), and explicit parameterized SQL queries.
-2. **Layered Architecture (`Routes → Validators → Controllers → Services → Queries`)**: Isolates business logic strictly within the service layer so controllers remain thin and business rules are testable independently.
-3. **Dual Enforcement for Business Rules**: High-level validation runs in the service layer for human-friendly error messages, backed by database constraints (ENUMs, partial unique indexes, check constraints) for guaranteed data integrity.
-4. **PostgreSQL Sequence for References**: Sequence-driven references (`'RD-' || LPAD(nextval('request_ref_seq')::text, 6, '0')`) prevent race conditions under concurrent creation.
-5. **Debounced Search & Server-Side Pagination**: Debounced search input (250ms) paired with SQL `LIMIT`/`OFFSET` and `COUNT(*)` prevents API spamming and avoids client-side memory bloat.
+1. **Raw SQL over ORM**: Full control over query plans, parameterized queries, and PostgreSQL-specific features like partial unique indexes (`WHERE status NOT IN ('Rejected', 'Completed') AND is_removed = FALSE`).
+2. **Layered Express Architecture (`Routes → Validators → Controllers → Services → Queries`)**: Separates HTTP handling from business logic, ensuring business rules in the service layer are easily testable and explainable.
+3. **Database Sequence for References**: PostgreSQL sequence `request_ref_seq` generates monotonic, human-readable IDs (`RD-000001`) atomically without race conditions.
+4. **Server-Side Search & Pagination**: ILIKE substring search, multi-field filtering, and pagination are handled directly in PostgreSQL via `LIMIT`/`OFFSET` and `COUNT(*)`, preventing client-side memory bloat.
+5. **Optimistic UI with Prefetching**: Instant UI state feedback on note submission, status transitions, and Next.js route prefetching.
 
 ---
 
 ## 7. Assumptions Made
 
-1. **Single-Desk Agent Mode**: The PRD specifies support agent workflows without requiring an authentication/user-login system.
-2. **Customer Contact**: Customer email is used as the primary contact identifier.
-3. **Item Identity**: An item is identified by the `(order_id, item_name)` pair. `item_sku` is an optional secondary identifier.
-4. **Notes Author**: Notes are recorded system-wide without individual author user IDs.
+1. **Single-Desk Agent Mode**: Single-agent operational workflow without authentication system per the brief.
+2. **Customer Contact**: Customer email serves as the primary contact detail.
+3. **Item Identity**: An item is identified by the `(order_id, item_name)` pair. `item_sku` is an optional auxiliary SKU.
+4. **Notes Author**: System-wide internal desk notes without individual author accounts.
 
 ---
 
 ## 8. What is Incomplete / Next Steps
 
-- **Customer Photo/Receipt Uploads**: Adding S3/Cloud storage file attachment upload for damaged item verification.
-- **Email Notifications / Webhooks**: Triggering automated customer emails upon status changes (e.g. Refund approved).
-- **Cursor-Based Pagination**: Transitioning from `LIMIT`/`OFFSET` to keyset/cursor pagination for scaling to multi-million row datasets.
+- **Damaged Item Image Uploads**: Cloud/S3 storage integration for customer-uploaded proof photos.
+- **Customer Email Webhooks**: Automated notification triggers on status transitions (e.g., Refund processed).
+- **Cursor/Keyset Pagination**: Implementing keyset pagination for scaling past hundreds of thousands of records.
 
 ---
 
 ## 9. Time Spent
-- **Total Time Spent**: Approximately **14 hours** (Database design, backend business rules hardening, automated API smoke testing, Next.js frontend implementation, and documentation).
+- **Hours Spent**: Roughly **9 hours** (from 2:00 PM to 11:00 PM) covering PostgreSQL schema design, Express API and business rules enforcement, automated verification tests, Next.js frontend implementation, and final audit.
