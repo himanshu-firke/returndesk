@@ -86,23 +86,29 @@ All responses use a predictable JSON envelope:
 
 ### Prerequisites
 - Node.js 18+
-- PostgreSQL 14+ running locally on port 5432
+- PostgreSQL database (either a free cloud instance on [Neon.tech](https://neon.tech) or a local PostgreSQL 14+ instance)
 
-### Step 1: Database Setup
-1. Create PostgreSQL database:
-   ```sql
-   CREATE DATABASE returndesk;
-   ```
-2. Configure `server/.env` (copy from `server/.env.example`):
-   ```env
-   PORT=3001
-   DB_HOST=localhost
-   DB_PORT=5432
-   DB_NAME=returndesk
-   DB_USER=postgres
-   DB_PASSWORD=your_postgres_password
-   CLIENT_URL=http://localhost:3000
-   ```
+### Step 1: Database Configuration
+Configure `server/.env` (copy from `server/.env.example`):
+
+**Option A — Cloud PostgreSQL (Recommended: Neon / Supabase / Render)**
+```env
+PORT=3001
+DATABASE_URL=postgresql://user:password@host/dbname?sslmode=require
+CLIENT_URL=http://localhost:3000
+```
+
+**Option B — Local PostgreSQL**
+```env
+PORT=3001
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=returndesk
+DB_USER=postgres
+DB_PASSWORD=your_postgres_password
+CLIENT_URL=http://localhost:3000
+```
+*(If using local Postgres, create the database first: `CREATE DATABASE returndesk;`)*
 
 ### Step 2: Backend Setup & Seed Script
 ```bash
@@ -112,7 +118,7 @@ npm install
 # 1. Test database connection
 npm run db:check
 
-# 2. Run DDL schema migration
+# 2. Run DDL schema migration (Tables, ENUMs, Sequence, Partial Index)
 npm run db:setup
 
 # 3. Populate database with 33 realistic requests across all statuses + 17 notes
@@ -123,7 +129,7 @@ npm run dev
 ```
 
 ### Step 3: Frontend Setup
-In a new terminal:
+In a separate terminal:
 ```bash
 cd client
 npm install
