@@ -38,7 +38,7 @@ const DECIDED_STATUSES = ['Approved', 'Rejected', 'Completed'];
 function validateStatusTransition(currentStatus, nextStatus) {
   const allowed = LEGAL_TRANSITIONS[currentStatus];
   if (!allowed.includes(nextStatus)) {
-    const allowedS  tr =
+    const allowedStr =
       allowed.length > 0 ? allowed.map((s) => `"${s}"`).join(', ') : 'none — this is a final state';
     throw new AppError(
       422,
