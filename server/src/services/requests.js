@@ -21,10 +21,10 @@ const AppError = require('../utils/AppError');
 // Only these transitions are legal. Any other is rejected.
 // ─────────────────────────────────────────────────────────────
 const LEGAL_TRANSITIONS = {
-  'Open':      ['In Review'],
+  'Open': ['In Review'],
   'In Review': ['Approved', 'Rejected'],
-  'Approved':  ['Completed'],
-  'Rejected':  [],   // final state
+  'Approved': ['Completed'],
+  'Rejected': [],   // final state
   'Completed': [],   // final state
 };
 
@@ -38,13 +38,13 @@ const DECIDED_STATUSES = ['Approved', 'Rejected', 'Completed'];
 function validateStatusTransition(currentStatus, nextStatus) {
   const allowed = LEGAL_TRANSITIONS[currentStatus];
   if (!allowed.includes(nextStatus)) {
-    const allowedStr =
+    const allowedS  tr =
       allowed.length > 0 ? allowed.map((s) => `"${s}"`).join(', ') : 'none — this is a final state';
     throw new AppError(
       422,
       'INVALID_STATUS_TRANSITION',
       `Cannot transition from "${currentStatus}" to "${nextStatus}". ` +
-        `Legal transitions from "${currentStatus}": ${allowedStr}.`
+      `Legal transitions from "${currentStatus}": ${allowedStr}.`
     );
   }
 }
@@ -93,7 +93,7 @@ async function createRequest(data) {
       409,
       'DUPLICATE_ACTIVE_REQUEST',
       `An active request already exists for item "${data.item_name}" on order "${data.order_id}". ` +
-        `A new request can only be raised once the existing one is Rejected or Completed.`
+      `A new request can only be raised once the existing one is Rejected or Completed.`
     );
   }
 
@@ -209,7 +209,7 @@ async function removeRequest(id) {
       422,
       'REMOVAL_NOT_ALLOWED',
       `Only requests with status "Open" or "Rejected" can be removed. ` +
-        `This request is "${request.status}".`
+      `This request is "${request.status}".`
     );
   }
 

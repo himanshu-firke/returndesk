@@ -167,7 +167,7 @@ export default function RequestDetailPage() {
           </div>
 
           {/* Quick status actions header */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {legalNextStatuses.map((nextStatus) => (
               <button
                 key={nextStatus}
