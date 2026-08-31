@@ -13,13 +13,18 @@ const fs = require('fs');
 const path = require('path');
 
 async function setup() {
-  const client = new Client({
-    host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT || '5432', 10),
-    database: process.env.DB_NAME || 'returndesk',
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-  });
+  const client = process.env.DATABASE_URL
+    ? new Client({
+        connectionString: process.env.DATABASE_URL,
+        ssl: { rejectUnauthorized: false },
+      })
+    : new Client({
+        host: process.env.DB_HOST || 'localhost',
+        port: parseInt(process.env.DB_PORT || '5432', 10),
+        database: process.env.DB_NAME || 'returndesk',
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+      });
 
   try {
     await client.connect();
