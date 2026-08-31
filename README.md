@@ -1,7 +1,5 @@
 # ReturnDesk
 
-> **Live Deployed Application**: [https://returndesk-ten.vercel.app](https://returndesk-ten.vercel.app)
-
 ## 1. Overview
 ReturnDesk is a full-stack return management application for online store support agents to raise customer returns, review items, execute legal status transitions, record resolutions (Refund, Replacement, Store Credit), and append chronological internal notes.
 
